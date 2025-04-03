@@ -67,12 +67,31 @@ export type SocketData = {
 
 export interface IChat {
   name: string;
+  _id: string
   groupChat: boolean;
   groupMembers: [
     {
       _id: mongoose.Types.ObjectId;
       name: string;
       avatar: string;
+    }
+  ];
+  groupAdmin: mongoose.Types.ObjectId;
+}
+
+export interface TransformChats{
+  name: string;
+  _id: string
+  groupChat: boolean;
+  groupMembers: [
+    {
+      _id: mongoose.Types.ObjectId;
+      name: string;
+      avatar: {
+        public_id: string;
+        url: string;
+      };
+      username: string;
     }
   ];
   groupAdmin: mongoose.Types.ObjectId;

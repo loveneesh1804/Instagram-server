@@ -1,31 +1,34 @@
 import mongoose from "mongoose";
-import { MemberTypes } from "./types.js";
+import { INewMember, MemberTypes, TransformChats, TransformMemberType } from "./types.js";
 import { Message } from "./models/message.model.js";
 import cloudinary from "cloudinary";
 
 export const getOtherMember = (members: MemberTypes[], user: string) =>
   members.find((el) => el._id.toString() !== user.toString());
 
-export const getLastMessage = async (chatId: mongoose.Types.ObjectId) => {
+export const getLastMessage = async (
+  chatId: mongoose.Types.ObjectId | string
+) => {
   const lastMessage = await Message.find({ chatId })
     .sort({ createdAt: -1 })
-    .limit(1).populate('sender','name');
+    .limit(1)
+    .populate("sender", "name");
   return lastMessage;
 };
 
 export const deleteFromCloudinary = async (id: string[]) => {
-  const promise = id.map(el=>{
-    return new Promise<cloudinary.DeleteApiResponse>((resolve,reject)=>{
-      cloudinary.v2.uploader.destroy(el,(err,result)=>{
+  const promise = id.map((el) => {
+    return new Promise<cloudinary.DeleteApiResponse>((resolve, reject) => {
+      cloudinary.v2.uploader.destroy(el, (err, result) => {
         if (err) return reject(err);
         resolve(result as cloudinary.DeleteApiResponse);
-      })
-    })
-  })
-  try{
+      });
+    });
+  });
+  try {
     const result = await Promise.all(promise);
     return result;
-  }catch{
+  } catch {
     throw new Error("Error Deleting Files from cloudinary");
   }
 };
@@ -40,6 +43,8 @@ export const uploadToCloudinary = async (files: Express.Multer.File[] = []) => {
         base64(el),
         {
           resource_type: "auto",
+          quality: "auto:low",
+          fetch_format: "auto",
         },
         (err, result) => {
           if (err) return rejects(err);
@@ -159,3 +164,35 @@ export const mailTemplate = (otp: string, mail: string): string => `
   </body>
 </html>
 `;
+
+export const transformChats = async (el:TransformChats,user:string) => {
+  const otherMember = getOtherMember(el.groupMembers, user);
+  const lastMessage = await getLastMessage(el._id);
+  return {
+    _id: el._id,
+    groupChats: el.groupChat,
+    groupName: el.groupChat
+      ? el.name
+      : (otherMember as TransformMemberType).name,
+    groupMembers: el.groupMembers.reduce(
+      (acc: INewMember[], el: TransformMemberType) => {
+        if (el._id.toString() !== user.toString()) {
+          acc.push({
+            _id: el._id,
+            name: el.name,
+            avatar: el.avatar,
+            username: el.username,
+          });
+        }
+        return acc;
+      },
+      []
+    ),
+    lastMessage: lastMessage.length ? lastMessage[0] : {},
+    avatar: el.groupChat
+      ? el.groupMembers
+          .slice(0, 2)
+          .map((i: TransformMemberType) => i.avatar.url)
+      : [(otherMember as TransformMemberType).avatar.url],
+  };
+};

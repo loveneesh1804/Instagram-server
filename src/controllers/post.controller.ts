@@ -65,10 +65,10 @@ export const getMyPost = TryCatch(
 
 export const getMyMorePost = TryCatch(
   async (req: Request, res: Response, next: NextFunction) => {
-    const { id } = req.query;
+    const { id,user } = req.query;
     if (!id) return next(new Errorhandler("Invalid Id", 500));
 
-    const myPosts = await Post.find({ userId: req.token, _id: { $ne: id } })
+    const myPosts = await Post.find({ userId: user, _id: { $ne: id } })
       .populate("userId", "name")
       .sort({ createdAt: -1 })
       .limit(6);

@@ -17,12 +17,14 @@ import {
   INewMember,
   IResourcesType,
   MemberTypes,
+  TransformChats,
   TransformMemberType,
 } from "../types.js";
 import {
   deleteFromCloudinary,
   getLastMessage,
   getOtherMember,
+  transformChats,
   uploadToCloudinary,
 } from "../features.js";
 import mongoose from "mongoose";
@@ -36,14 +38,14 @@ export const newChat = TryCatch(
     if (!members.length) {
       return next(new Errorhandler("No Member Found!", 404));
     }
-
+    var chat: IChat;
     if (members.length === 1) {
       const member = [...members, req.token];
 
       const m1 = await User.findById(members[0]).select("name");
       const m2 = await User.findById(req.token).select("name");
 
-      await Chat.create({
+      chat = await Chat.create({
         name: `${m1.name}-${m2.name}`,
         groupMembers: member,
         groupAdmin: req.token,
@@ -53,7 +55,7 @@ export const newChat = TryCatch(
     } else {
       const allMembers = [...members, req.token];
 
-      await Chat.create({
+      chat = await Chat.create({
         name: "null",
         groupChat: true,
         groupAdmin: req.token,
@@ -65,9 +67,18 @@ export const newChat = TryCatch(
 
     emitEvent(req, REFETCH_CHATS, members);
 
+    const chats:TransformChats = await Chat.findById(chat._id).populate(
+      "groupMembers",
+      "name avatar username"
+    );
+
+    const transformedChats = await transformChats(chats, req.token);
+
     return res.status(201).json({
       message: "Chat Created Successfully!",
       success: true,
+      chatId: chat._id,
+      chat: transformedChats
     });
   }
 );
@@ -79,43 +90,15 @@ export const myChats = TryCatch(
       "name avatar username"
     );
 
-    const transformChats = await Promise.all(
-      chats.map(async (el) => {
-        const otherMember = getOtherMember(el.groupMembers, req.token);
-        const lastMessage = await getLastMessage(el._id);
-        return {
-          _id: el._id,
-          groupChats: el.groupChat,
-          groupName: el.groupChat
-            ? el.name
-            : (otherMember as TransformMemberType).name,
-          groupMembers: el.groupMembers.reduce(
-            (acc: INewMember[], el: TransformMemberType) => {
-              if (el._id.toString() !== req.token.toString()) {
-                acc.push({
-                  _id: el._id,
-                  name: el.name,
-                  avatar: el.avatar,
-                  username: el.username,
-                });
-              }
-              return acc;
-            },
-            []
-          ),
-          lastMessage: lastMessage.length ? lastMessage[0] : {},
-          avatar: el.groupChat
-            ? el.groupMembers
-                .slice(0, 2)
-                .map((i: TransformMemberType) => i.avatar.url)
-            : [(otherMember as TransformMemberType).avatar.url],
-        };
-      })
+    const transformedChats = await Promise.all(
+      chats.map(
+        async (el: TransformChats) => await transformChats(el, req.token)
+      )
     );
 
     return res.status(200).json({
       success: true,
-      chats: transformChats,
+      chats: transformedChats,
     });
   }
 );
